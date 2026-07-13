@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual Environment
+venv/
+.env
+
+# Audio uploads
+uploaded_audio/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
