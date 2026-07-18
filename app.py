@@ -118,7 +118,7 @@ st.markdown(
         margin-bottom: 2rem;
     }
 
-    hr { border-color: #1e1e30 !important; }
+    hr { border-color: #1e1e30 !important; }p
     </style>
     """,
     unsafe_allow_html=True,

@@ -5,9 +5,12 @@ import os
 
 app = FastAPI(title="Audio Transfer Server")
 
-UPLOAD_DIR = "uploaded_audio"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+IS_VERCEL = os.getenv("VERCEL") == "1"
 
+UPLOAD_DIR = "uploaded_audio"
+
+if not IS_VERCEL:
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 STORED_FILE_PATH = None
 
 
@@ -23,9 +26,19 @@ async def receive_audio(file: UploadFile = File(...)):
         if ext not in [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac"]:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
 
-    save_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(save_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    contents = await file.read()
+
+    if not IS_VERCEL:
+        save_path = os.path.join(UPLOAD_DIR, file.filename)
+
+        with open(save_path, "wb") as buffer:
+            buffer.write(contents)
+
+    return {
+        "message": "File received successfully",
+        "filename": file.filename,
+        "size_bytes": len(contents)
+    }
 
     STORED_FILE_PATH = save_path
 
@@ -46,6 +59,10 @@ async def send_audio():
         raise HTTPException(status_code=404, detail="No audio file available on server. Upload one first.")
 
     filename = os.path.basename(STORED_FILE_PATH)
+    if IS_VERCEL:
+    return {
+        "message": "Download endpoint is disabled on Vercel."
+    }
     return FileResponse(
         path=STORED_FILE_PATH,
         media_type="audio/mpeg",
