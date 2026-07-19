@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 import shutil
 import os
 
-api = FastAPI(title="Audio Transfer Server")
+app = FastAPI(title="Audio Transfer Server")
 
 IS_VERCEL = os.getenv("VERCEL") == "1"
 
