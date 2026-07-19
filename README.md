@@ -6,10 +6,14 @@ A minimal Streamlit + FastAPI demo for uploading and retrieving audio files.
 
 ```
 .
-├── app.py            # Streamlit frontend
-├── server.py         # FastAPI backend
-├── requirements.txt  # Dependencies
-└── uploaded_audio/   # Auto-created; stores received files
+audio-transfer-system/
+
+│── api/
+│     └── index.py
+│
+│── app.py
+│── requirements.txt
+│── vercel.json
 ```
 
 ## Setup
