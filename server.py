@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 import os
 import io
 import uuid
+import requests
 from supabase import create_client, Client
 
 app = FastAPI(title="Audio Transfer Server")
@@ -17,7 +18,17 @@ if not SUPABASE_URL or not SUPABASE_KEY:
         "SUPABASE_URL and SUPABASE_KEY must be set as environment variables."
     )
 
+# Used only for the database table (this part of the library works fine).
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Storage is handled with direct REST calls instead of the storage3 client,
+# which has a bug in some versions that throws:
+#   'dict' object has no attribute 'text'
+STORAGE_BASE = f"{SUPABASE_URL}/storage/v1/object"
+STORAGE_HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+}
 
 ALLOWED_EXTENSIONS = [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac"]
 
@@ -42,31 +53,31 @@ async def receive_audio(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Unsupported audio format.")
 
     contents = await file.read()
-
-    # Use a random storage key so filenames never collide in the bucket
+    content_type = file.content_type or "audio/mpeg"
     storage_path = f"{uuid.uuid4()}{ext}"
 
-    try:
-        supabase.storage.from_(BUCKET_NAME).upload(
-            storage_path,
-            contents,
-            {"content-type": file.content_type or "audio/mpeg"},
+    upload_resp = requests.post(
+        f"{STORAGE_BASE}/{BUCKET_NAME}/{storage_path}",
+        headers={**STORAGE_HEADERS, "Content-Type": content_type},
+        data=contents,
+    )
+    if upload_resp.status_code not in (200, 201):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Storage upload failed: {upload_resp.status_code} {upload_resp.text}",
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Storage upload failed: {e}")
 
     record = {
         "filename": file.filename,
         "storage_path": storage_path,
-        "content_type": file.content_type or "audio/mpeg",
+        "content_type": content_type,
         "size_bytes": len(contents),
     }
 
     try:
         result = supabase.table("audio_files").insert(record).execute()
     except Exception as e:
-        # Roll back the uploaded blob if the metadata write fails
-        supabase.storage.from_(BUCKET_NAME).remove([storage_path])
+        requests.delete(f"{STORAGE_BASE}/{BUCKET_NAME}/{storage_path}", headers=STORAGE_HEADERS)
         raise HTTPException(status_code=500, detail=f"Database insert failed: {e}")
 
     return {
@@ -94,13 +105,15 @@ async def send_audio():
 
     record = result.data[0]
 
-    try:
-        file_bytes = supabase.storage.from_(BUCKET_NAME).download(record["storage_path"])
-    except Exception:
+    download_resp = requests.get(
+        f"{STORAGE_BASE}/{BUCKET_NAME}/{record['storage_path']}",
+        headers=STORAGE_HEADERS,
+    )
+    if download_resp.status_code != 200:
         raise HTTPException(status_code=404, detail="File exists in database but not in storage.")
 
     return StreamingResponse(
-        io.BytesIO(file_bytes),
+        io.BytesIO(download_resp.content),
         media_type=record["content_type"],
         headers={"Content-Disposition": f'attachment; filename="{record["filename"]}"'},
     )
