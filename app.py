@@ -2,7 +2,9 @@ import streamlit as st
 import requests
 import os
 
-SERVER_URL = "http://127.0.0.1:8000"
+# Points at your deployed FastAPI backend by default.
+# Override locally with: export SERVER_URL="http://127.0.0.1:8000"
+SERVER_URL = os.environ.get("SERVER_URL", "https://audio-transfer-system.vercel.app")
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
